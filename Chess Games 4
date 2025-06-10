@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Flip Chess</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #312e2b; 
+            color: #ecf0f1;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        #chess-board {
+            display: grid;
+            grid-template-columns: repeat(8, 80px);
+            grid-template-rows: repeat(4, 80px);
+            border: 5px solid #6f4f28; 
+            margin-bottom: 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5); 
+        }
+
+        .square {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 60px;
+            cursor: pointer;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .light-square { background-color: #f0d9b5; }
+        .dark-square { background-color: #b58863; }
+        
+        .red-piece {
+            color: #c0392b; 
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        .blue-piece {
+            color: #2980b9;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .hidden-piece {
+            background-color: #6a89cc; 
+            color: #fff;
+            font-size: 50px;
+            border: 2px solid #4a69bd;
+        }
+        .hidden-piece:hover { background-color: #82a0d9; }
+
+        .selected {
+            background-color: #55a630 !important; 
+            border: 3px solid #386641;
+        }
+
+        .valid-move {
+            background-color: rgba(167, 201, 87, 0.7) !important;
+        }
+        
+        #info-panel {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 650px;
+        }
+        
+        .player-info {
+            width: 200px;
+            padding: 10px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            background-color: rgba(0,0,0,0.2);
+        }
+        
+        #player1-info.active { border-color: #55a630; }
+        #player2-info.active { border-color: #55a630; }
+        
+        #game-status {
+            font-size: 1.2em;
+            font-weight: bold;
+            height: 50px;
+            color: #ecf0f1;
+        }
+        
+        #game-over {
+            font-size: 1.5em;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            border: none;
+            background-color: #4a69bd;
+            color: #fff;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #6a89cc;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1>Happy Flip Chess</h1>
+    <div id="chess-board"></div>
+    <div id="info-panel">
+        <div id="player1-info" class="player-info">
+            <h3>Player 1</h3>
+            <p id="player1-color">Color: (Undecided)</p>
+            <p id="player1-score">Score: 0</p>
+        </div>
+        <div id="player2-info" class="player-info">
+            <h3>Player 2</h3>
+            <p id="player2-color">Color: (Undecided)</p>
+            <p id="player2-score">Score: 0</p>
+        </div>
+    </div>
+    <p id="game-status"></p>
+    <p id="game-over"></p>
+    <button id="reset-button">New Game</button>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const boardElement = document.getElementById('chess-board');
+        const p1ColorEl = document.getElementById('player1-color');
+        const p2ColorEl = document.getElementById('player2-color');
+        const p1ScoreEl = document.getElementById('player1-score');
+        const p2ScoreEl = document.getElementById('player2-score');
+        const gameStatusEl = document.getElementById('game-status');
+        const gameOverEl = document.getElementById('game-over');
+        const resetButton = document.getElementById('reset-button');
+        const p1InfoEl = document.getElementById('player1-info');
+        const p2InfoEl = document.getElementById('player2-info');
+
+        let board = [];
+        let selectedPieceIndex = null;
+        let validMoves = [];
+        let isTurnInProgress = false;
+        
+        let isGameStarted = false;
+        let player1Color = null; 
+        let isWhiteTurn = true; 
+        let isGameOver = false;
+        let flippedPiecesCount = 0;
+        
+        // **NEW**: State variables for the new Endgame phase
+        let isEndgamePhase = false;
+        let movesWithoutCapture = 0;
+
+        const scores = { 'k': 8, 'q': 17, 'r': 11, 'b': 6, 'n': 5, 'p': 4 };
+
+        function initializeBoard() {
+            const pieces = [
+                'R','N','B','Q','K','B','N','R', 'P','P','P','P','P','P','P','P',
+                'r','n','b','q','k','b','n','r', 'p','p','p','p','p','p','p','p'
+            ];
+            
+            for (let i = pieces.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+            }
+
+            board = pieces.map(p => ({ piece: p, isFlipped: false }));
+            
+            isGameStarted = false;
+            isGameOver = false;
+            isTurnInProgress = false;
+            player1Color = null;
+            selectedPieceIndex = null;
+            validMoves = [];
+            flippedPiecesCount = 0;
+            isEndgamePhase = false;
+            movesWithoutCapture = 0;
+
+            gameStatusEl.textContent = 'Player 1: Flip a piece to begin!';
+            gameOverEl.textContent = '';
+            p1ColorEl.textContent = 'Color: (Undecided)';
+            p2ColorEl.textContent = 'Color: (Undecided)';
+            p1ScoreEl.textContent = 'Score: 0';
+            p2ScoreEl.textContent = 'Score: 0';
+            p1InfoEl.classList.add('active');
+            p2InfoEl.classList.remove('active');
+            
+            renderBoard();
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let i = 0; i < 32; i++) {
+                const square = document.createElement('div');
+                const isLight = (Math.floor(i / 8) + i) % 2 === 0;
+                square.classList.add('square', isLight ? 'light-square' : 'dark-square');
+                
+                const cell = board[i];
+
+                if (!cell.isFlipped) {
+                    square.classList.add('hidden-piece');
+                    square.innerHTML = '&#9733;'; 
+                } else {
+                    if (cell.piece) {
+                        const pieceColorClass = isWhitePiece(cell.piece) ? 'red-piece' : 'blue-piece';
+                        square.innerHTML = `<span class="${pieceColorClass}">${getPieceUnicode(cell.piece)}</span>`;
+                    }
+                }
+
+                if (selectedPieceIndex === i) square.classList.add('selected');
+                if (validMoves.includes(i)) square.classList.add('valid-move');
+
+                square.addEventListener('click', () => onSquareClick(i));
+                boardElement.appendChild(square);
+            }
+        }
+
+        function onSquareClick(index) {
+            if (isGameOver || isTurnInProgress) return;
+
+            if (!isGameStarted) {
+                handleFirstFlip(index);
+                return;
+            }
+
+            const clickedCell = board[index];
+
+            if (selectedPieceIndex !== null) {
+                if (validMoves.includes(index)) {
+                    movePiece(selectedPieceIndex, index);
+                } else { 
+                    selectedPieceIndex = null;
+                    validMoves = [];
+                    renderBoard();
+                }
+                return;
+            }
+            
+            // **MODIFIED**: Players can only flip pieces if the Endgame has not started
+            if (!isEndgamePhase && !clickedCell.isFlipped) {
+                isTurnInProgress = true;
+                clickedCell.isFlipped = true;
+                flippedPiecesCount++; 
+                renderBoard(); 
+
+                setTimeout(() => {
+                    switchTurn();
+                    isTurnInProgress = false;
+                }, 500);
+                return;
+            }
+
+            if (clickedCell.piece && isPieceOfCurrentTurn(clickedCell.piece)) {
+                selectedPieceIndex = index;
+                validMoves = getValidMoves(clickedCell.piece, index);
+                renderBoard();
+            }
+        }
+
+        function handleFirstFlip(index) {
+            isTurnInProgress = true;
+            board[index].isFlipped = true;
+            flippedPiecesCount++; 
+            isGameStarted = true;
+            renderBoard(); 
+
+            const flippedPiece = board[index].piece;
+            if (flippedPiece && isWhitePiece(flippedPiece)) {
+                player1Color = 'black';
+                isWhiteTurn = true; 
+            } else {
+                player1Color = 'white';
+                isWhiteTurn = false;
+            }
+            
+            setTimeout(() => {
+                switchTurn();
+                isTurnInProgress = false;
+            }, 500);
+        }
+
+        function movePiece(from, to) {
+            const isCapture = !!(board[to].isFlipped && board[to].piece);
+            
+            board[to].piece = board[from].piece;
+            board[from].piece = '';
+            
+            // **NEW**: Only track moves for the 20-step rule if it's the Endgame
+            if (isEndgamePhase) {
+                if (isCapture) {
+                    movesWithoutCapture = 0;
+                } else {
+                    movesWithoutCapture++;
+                }
+            }
+            
+            switchTurn();
+        }
+        
+        function switchTurn() {
+            selectedPieceIndex = null;
+            validMoves = [];
+            isWhiteTurn = !isWhiteTurn;
+            
+            updatePlayerUI();
+            renderBoard();
+            
+            checkGameOver();
+        }
+
+        // **REWRITTEN**: New game over logic with two phases
+        function checkGameOver() {
+            if (isEndgamePhase) {
+                // ENDGAME PHASE: Check for wipeout or 20 moves rule
+                let whiteCount = 0;
+                let blackCount = 0;
+                board.forEach(cell => {
+                    if (cell.isFlipped && cell.piece) {
+                        if (isWhitePiece(cell.piece)) whiteCount++;
+                        else blackCount++;
+                    }
+                });
+
+                if (whiteCount === 0 || blackCount === 0) {
+                    gameOverEl.textContent = "One side has been eliminated!";
+                    endGameAndScore();
+                    return;
+                }
+                
+                if (movesWithoutCapture >= 20) {
+                    gameOverEl.textContent = "Game over: 20 moves without a capture!";
+                    endGameAndScore();
+                    return;
+                }
+            } else if (flippedPiecesCount === 32) {
+                // TRANSITION TO ENDGAME PHASE
+                isEndgamePhase = true;
+                movesWithoutCapture = 0; // Start the counter now
+                gameStatusEl.textContent = "All pieces revealed! The Endgame begins!";
+            }
+        }
+        
+        function endGameAndScore() {
+            isGameOver = true;
+            let whiteScore = 0;
+            let blackScore = 0;
+
+            board.forEach(cell => {
+                if(cell.isFlipped && cell.piece) {
+                    const score = scores[cell.piece.toLowerCase()];
+                    if(isWhitePiece(cell.piece)) whiteScore += score;
+                    else blackScore += score;
+                }
+            });
+            
+            p1ScoreEl.textContent = `Final Score: ${player1Color === 'white' ? whiteScore : blackScore}`;
+            p2ScoreEl.textContent = `Final Score: ${player1Color === 'white' ? blackScore : whiteScore}`;
+
+            const p1Final = player1Color === 'white' ? whiteScore : blackScore;
+            const p2Final = player1Color === 'white' ? blackScore : whiteScore;
+            
+            let winnerMessage = '';
+            if (p1Final > p2Final) winnerMessage = "Player 1 Wins!";
+            else if (p2Final > p1Final) winnerMessage = "Player 2 Wins!";
+            else winnerMessage = "It's a Draw!";
+            
+            // Prepend "Game Over - " to the existing message if one was set
+            const finalMessage = gameOverEl.textContent ? `${gameOverEl.textContent} ${winnerMessage}` : `Game Over - ${winnerMessage}`;
+            gameOverEl.textContent = finalMessage;
+            gameStatusEl.textContent = '';
+        }
+        
+        function getValidMoves(piece, index) {
+            const legalMoves = [];
+            const row = Math.floor(index / 8);
+            const col = index % 8;
+
+            switch (piece.toLowerCase()) {
+                case 'p':
+                    const straightMoveDirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    const diagonalCaptureDirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+                    straightMoveDirs.forEach(([rd, cd]) => {
+                        const targetRow = row + rd;
+                        const targetCol = col + cd;
+                        if (targetRow >= 0 && targetRow < 4 && targetCol >= 0 && targetCol < 8) {
+                            const targetIndex = targetRow * 8 + targetCol;
+                            const targetCell = board[targetIndex];
+                            if (targetCell.isFlipped && !targetCell.piece) {
+                                legalMoves.push(targetIndex);
+                            }
+                        }
+                    });
+                    diagonalCaptureDirs.forEach(([rd, cd]) => {
+                        const targetRow = row + rd;
+                        const targetCol = col + cd;
+                        if (targetRow >= 0 && targetRow < 4 && targetCol >= 0 && targetCol < 8) {
+                            const targetIndex = targetRow * 8 + targetCol;
+                            const targetCell = board[targetIndex];
+                            if (targetCell.isFlipped && targetCell.piece && !isPieceOfCurrentTurn(targetCell.piece)) {
+                                legalMoves.push(targetIndex);
+                            }
+                        }
+                    });
+                    break;
+                case 'b':
+                    const bStraightDirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    const bDiagonalDirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+                    bStraightDirs.forEach(([rd, cd]) => {
+                        let r = row + rd, c = col + cd;
+                        while(r >= 0 && r < 4 && c >= 0 && c < 8) {
+                            const i = r * 8 + c;
+                            const targetCell = board[i];
+                            if (!targetCell.isFlipped || targetCell.piece) break;
+                            legalMoves.push(i);
+                            r += rd; c += cd;
+                        }
+                    });
+                    bDiagonalDirs.forEach(([rd, cd]) => {
+                        let r = row + rd, c = col + cd;
+                        while(r >= 0 && r < 4 && c >= 0 && c < 8) {
+                            const i = r * 8 + c;
+                            const targetCell = board[i];
+                            if (!targetCell.isFlipped) break;
+                            if (targetCell.piece) {
+                                if (!isPieceOfCurrentTurn(targetCell.piece)) legalMoves.push(i);
+                                break;
+                            }
+                            legalMoves.push(i);
+                            r += rd; c += cd;
+                        }
+                    });
+                    break;
+                case 'r': case 'q':
+                    const slideDirs = piece.toLowerCase() === 'r' 
+                        ? [[-1, 0], [1, 0], [0, -1], [0, 1]] 
+                        : [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+                    slideDirs.forEach(([rd, cd]) => {
+                        let r = row + rd, c = col + cd;
+                        while(r >= 0 && r < 4 && c >= 0 && c < 8) {
+                            const i = r * 8 + c;
+                            const targetCell = board[i];
+                            if (!targetCell.isFlipped) break;
+                            if (targetCell.piece) {
+                                if (!isPieceOfCurrentTurn(targetCell.piece)) legalMoves.push(i);
+                                break;
+                            }
+                            legalMoves.push(i);
+                            r += rd; c += cd;
+                        }
+                    });
+                    break;
+                case 'n':
+                    [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]].forEach(([rd, cd]) => {
+                        const r = row + rd, c = col + cd;
+                        if (r >= 0 && r < 4 && c >= 0 && c < 8) {
+                            const targetIndex = r * 8 + c;
+                            const targetCell = board[targetIndex];
+                            if (targetCell.isFlipped && (!targetCell.piece || !isPieceOfCurrentTurn(targetCell.piece))) {
+                                legalMoves.push(targetIndex);
+                            }
+                        }
+                    });
+                    break;
+                case 'k':
+                    [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].forEach(([rd, cd]) => {
+                        const r = row + rd, c = col + cd;
+                        if (r >= 0 && r < 4 && c >= 0 && c < 8) {
+                            const targetIndex = r * 8 + c;
+                            const targetCell = board[targetIndex];
+                            if (targetCell.isFlipped && (!targetCell.piece || !isPieceOfCurrentTurn(targetCell.piece))) {
+                                legalMoves.push(targetIndex);
+                            }
+                        }
+                    });
+                    break;
+            }
+            return legalMoves;
+        }
+        
+        function updatePlayerUI() {
+             const currentTurnColor = isWhiteTurn ? 'Red' : 'Blue';
+             if (isEndgamePhase) {
+                gameStatusEl.innerHTML = `ENDGAME: ${currentTurnColor}'s Turn <br> (Moves without capture: ${movesWithoutCapture} / 20)`;
+             } else {
+                gameStatusEl.innerHTML = `Flipping Phase: ${currentTurnColor}'s Turn <br> (Flipped: ${flippedPiecesCount} / 32)`;
+             }
+             
+             if (player1Color) {
+                 const p1DisplayColor = player1Color === 'white' ? 'Red' : 'Blue';
+                 const p2DisplayColor = player1Color === 'white' ? 'Blue' : 'Red';
+                 p1ColorEl.textContent = `Color: ${p1DisplayColor}`;
+                 p2ColorEl.textContent = `Color: ${p2DisplayColor}`;
+             }
+
+             const isP1Turn = player1Color ? (isWhiteTurn === (player1Color === 'white')) : false;
+             p1InfoEl.classList.toggle('active', isP1Turn);
+             p2InfoEl.classList.toggle('active', !isP1Turn);
+        }
+
+        function isWhitePiece(piece) {
+            return piece && piece.toUpperCase() === piece;
+        }
+
+        function isPieceOfCurrentTurn(piece) {
+            if (!piece) return false;
+            return isWhiteTurn === isWhitePiece(piece);
+        }
+
+        function getPieceUnicode(piece) {
+            const pieces = {
+                'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+                'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟︎'
+            };
+            return pieces[piece] || '';
+        }
+
+        resetButton.addEventListener('click', initializeBoard);
+        initializeBoard();
+    });
+</script>
+
+</body>
+</html>
