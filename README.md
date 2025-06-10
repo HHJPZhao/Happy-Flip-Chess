@@ -8,7 +8,7 @@ A fast-paced and unpredictable chess variant played on a crowded 4x8 board. All 
 
 ## ▶️ How to Play
 
-This game is designed to be played from a single HTML file. To play, simply download the game's `.html` file and open it in any modern web browser.
+This game is designed to be played from a single HTML file. To play, simply download the game's `[.html](https://hhjpzhao.github.io/Happy-Flip-Chess/)` file and open it in any modern web browser.
 
 
 
