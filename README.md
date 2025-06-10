@@ -10,7 +10,7 @@ A fast-paced and unpredictable chess variant played on a crowded 4x8 board. All 
 
 This game is designed to be played from a single HTML file. To play, simply download the game's `.html` file and open it in any modern web browser.
 
-*(You can add a link here once you publish this version of the game!)*
+
 
 ---
 
