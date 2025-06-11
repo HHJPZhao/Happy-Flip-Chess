@@ -1,6 +1,6 @@
 # Happy Flip Chess
 
-![Happy Flip Chess Board]()
+![Happy Flip Chess Board](https://github.com/HHJPZhao/Happy-Flip-Chess/blob/main/Happy-Flip-Chess%203.jpg)
 
 A fast-paced and unpredictable chess variant played on a crowded 4x8 board. All 32 standard chess pieces start hidden, creating a "fog of war" where strategy and luck collide. Players must decide whether to reveal new pieces or maneuver the ones they already control to capture their opponent's army and rack up the highest score.
 
